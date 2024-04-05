@@ -1,4 +1,9 @@
 # DAGFlow
+====
+![](https://github.com/yuyang0/dagflow/workflows/test/badge.svg)
+![](https://github.com/yuyang0/dagflow/workflows/golangci-lint/badge.svg)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/e76c475f817a409d860934a64c603cb1)](https://app.codacy.com/gh/yuyang0/dagflow/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+
 a DAG task engine based on asynq
 
 ## QuickStart
