@@ -13,6 +13,7 @@ import (
 )
 
 type NodeFunc func([]byte, map[string][]string) ([]byte, error)
+type SwitchCondFunc func([]byte) string
 
 type Flow struct {
 	Name   string
@@ -43,6 +44,10 @@ type flowNode struct {
 	name     string
 	fn       NodeFunc
 	execOpts *ExecutionOptions
+
+	// for switch node
+	condFn SwitchCondFunc
+	cases  map[string]NodeFunc
 }
 
 func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
@@ -54,6 +59,22 @@ func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
 		name:     name,
 		fn:       fn,
 		execOpts: execOpts,
+	})
+}
+
+func (f *Flow) SwitchNode(
+	name string, condFn SwitchCondFunc,
+	cases map[string]NodeFunc, opts ...Option,
+) error {
+	execOpts := &ExecutionOptions{}
+	for _, opt := range opts {
+		opt(execOpts)
+	}
+	return f.DAG.AddVertexByID(name, &flowNode{
+		name:     name,
+		execOpts: execOpts,
+		condFn:   condFn,
+		cases:    cases,
 	})
 }
 

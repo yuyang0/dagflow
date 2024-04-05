@@ -42,7 +42,15 @@ func (e *Executor) Execute(ctx context.Context) error {
 		return errors.Newf("inconsist flow name: %s != %s", flowName, f.Name)
 	}
 	node := dagNode.(*flowNode) // nolint
-	resp, err := node.fn(e.Body, nil)
+	nodeFn := node.fn
+	if node.condFn != nil {
+		key := node.condFn(e.Body)
+		nodeFn = node.cases[key]
+	}
+	if nodeFn == nil {
+		return errors.Newf("failed to get function for node: %s", nodeName)
+	}
+	resp, err := nodeFn(e.Body, nil)
 	if err != nil {
 		if node.execOpts.failureHandler != nil {
 			err = node.execOpts.failureHandler(err)

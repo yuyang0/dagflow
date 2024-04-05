@@ -66,3 +66,71 @@ a DAG task engine based on asynq
     ```golang
     svc.Submit("f1", []byte(`1`))
     ```
+
+## DAG
+### single node DAG
+
+```golang
+f, err := svc.NewFlow("f1")
+if err != nil {
+    log.Fatal("failed to create flow", err)
+}
+if err = f.Node("n1", incOp); err != nil {
+    log.Fatal("failed to create node", err)
+}
+```
+
+### complex DAG
+```golang
+
+func prepareFlow(f *flow.Flow) error {
+	if err := f.Node("l1n1", incOp); err != nil {
+		return err
+	}
+	if err := f.Node("l2n1", incOp); err != nil {
+		return err
+	}
+	if err := f.Node("l2n2", decOp); err != nil {
+		return err
+	}
+	if err := f.Node("l3n1", mulOp, flow.WithAggregator(func (dataMap map[string][]byte) ([]byte, error) {
+        l2n1Result := dataMap["l2n1"]
+        l2n2Result := dataMap["l2n2"]
+        // do anything you want to construct input data for node l3n1
+    })); err != nil {
+		return err
+	}
+	if err := f.Edge("l1n1", "l2n1"); err != nil {
+		return err
+	}
+	if err := f.Edge("l1n1", "l2n2"); err != nil {
+		return err
+	}
+	if err := f.Edge("l2n1", "l3n1"); err != nil {
+		return err
+	}
+	if err := f.Edge("l2n2", "l3n1"); err != nil {
+		return err
+	}
+	return nil
+}
+```
+
+### SwitchNode
+SwitchNode is a special type node which works like switch case statment in golang
+
+```golang
+
+f, err := svc.NewFlow("f1")
+if err != nil {
+    log.Fatal("failed to create flow", err)
+}
+if err = f.SwitchNode("n1", func(data []byte) string {
+    return "+"
+}, map[string]flow.NodeFunc{
+    "+": incOp,
+    "-": decOp,
+}); err != nil {
+    log.Fatal("failed to create node", err)
+}
+```
