@@ -1,8 +1,10 @@
-DAGFlow
-====
+# DAGFlow
+
 ![lint](https://github.com/yuyang0/dagflow/workflows/test/badge.svg)
 ![UT](https://github.com/yuyang0/dagflow/workflows/golangci-lint/badge.svg)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/e76c475f817a409d860934a64c603cb1)](https://app.codacy.com/gh/yuyang0/dagflow/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![GoDoc](https://godoc.org/github.com/yuyang0/dagflow?status.svg)](https://godoc.org/github.com/yuyang0/dagflow)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 a DAG task engine based on asynq
 
