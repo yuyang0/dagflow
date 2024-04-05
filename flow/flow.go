@@ -39,7 +39,7 @@ func New(
 	}
 }
 
-type FlowNode struct {
+type flowNode struct {
 	name     string
 	fn       NodeFunc
 	execOpts *ExecutionOptions
@@ -50,7 +50,7 @@ func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
 	for _, opt := range opts {
 		opt(execOpts)
 	}
-	return f.DAG.AddVertexByID(name, &FlowNode{
+	return f.DAG.AddVertexByID(name, &flowNode{
 		name:     name,
 		fn:       fn,
 		execOpts: execOpts,
@@ -88,7 +88,7 @@ func (f *Flow) asynqHandler() asynq.HandlerFunc {
 		if err := json.Unmarshal(t.Payload(), e); err != nil {
 			return errors.Wrapf(err, "filed to unmarshal payload")
 		}
-		if err := e.Execute(); err != nil {
+		if err := e.Execute(ctx); err != nil {
 			f.logger.Error("failed to run task", "execID", e.ID, "err", err)
 			return err
 		}

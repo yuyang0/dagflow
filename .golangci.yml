@@ -1,0 +1,61 @@
+run:
+  timeout: 5m
+  tests: false
+  skip-dirs:
+    - vendor
+    - tools
+    - 3rdmocks
+  modules-download-mode: readonly
+  go: 1.20
+
+linters-settings:
+  maligned:
+    suggest-new: true
+  gocritic:
+    disabled-checks:
+      - captLocal
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    # - depguard
+    - dogsled
+    - gochecknoinits
+    - goconst
+    - gocyclo
+    - gofmt
+    - goimports
+    - revive
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - rowserrcheck
+    - exportloopref
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - asciicheck
+    - nestif
+    - errcheck
+    - gocritic
+      #Consider this
+      # - godox
+      # - funlen
+      # - lll
+      # - gochecknoglobals
+      # don't enable:
+      # - whitespace
+      # - goerr113
+      # - godot
+      # - maligned
+      # - prealloc
+      # - testpackage
+      # - wsl
+      # - sylecheck

@@ -1,6 +1,9 @@
 package flow
 
-import "math/rand"
+import (
+	"crypto/rand"
+	"math/big"
+)
 
 // Aggregator definition for the data aggregator of nodes
 type Aggregator func(map[string][]byte) ([]byte, error)
@@ -14,9 +17,9 @@ type ForEach func([]byte) map[string][]byte
 type FuncErrorHandler func(error) error
 
 type ExecutionOptions struct {
-	aggregator     Aggregator
-	forwarder      Forwarder
-	noForwarder    bool
+	aggregator Aggregator
+	// forwarder      Forwarder
+	// noForwarder    bool
 	failureHandler FuncErrorHandler
 }
 
@@ -28,9 +31,20 @@ func WithAggregator(agg Aggregator) Option {
 	}
 }
 
+func WithFailureHandler(fn FuncErrorHandler) Option {
+	return func(o *ExecutionOptions) {
+		o.failureHandler = fn
+	}
+}
+
 func randomAgg(dataMap map[string][]byte) ([]byte, error) {
-	k := rand.Intn(len(dataMap))
-	i := 0
+	bg := big.NewInt(int64(len(dataMap)))
+	n, err := rand.Int(rand.Reader, bg)
+	if err != nil {
+		return nil, err
+	}
+	k := n.Int64()
+	i := int64(0)
 
 	for _, data := range dataMap {
 		if i == k {

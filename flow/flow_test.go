@@ -26,7 +26,7 @@ func TestDAG(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, children, 2)
 	for k, v := range children {
-		node, ok := v.(*FlowNode)
+		node, ok := v.(*flowNode)
 		assert.True(t, ok)
 		assert.Equal(t, k, node.name)
 		assert.True(t, k == "l2n1" || k == "l2n2")
@@ -36,7 +36,7 @@ func TestDAG(t *testing.T) {
 	assert.Len(t, parents, 2)
 
 	for k, v := range parents {
-		node, ok := v.(*FlowNode)
+		node, ok := v.(*flowNode)
 		assert.True(t, ok)
 		assert.Equal(t, k, node.name)
 		assert.True(t, k == "l2n1" || k == "l2n2")
