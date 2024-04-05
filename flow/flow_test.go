@@ -8,7 +8,7 @@ import (
 
 func TestDAG(t *testing.T) {
 	// TODO
-	f := New("flow1", nil, nil, nil)
+	f := New("flow1", nil, nil, nil, nil, nil)
 	f.Node("l1n1", nil)
 	f.Node("l2n1", nil)
 	f.Node("l2n2", nil)

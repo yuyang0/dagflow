@@ -12,12 +12,6 @@ import (
 	"github.com/yuyang0/dagflow/utils/idgen"
 )
 
-type ExecInfo struct {
-	// id format: "flow_name:node_name:random_id"
-	ID   string `json:"id"`
-	Body []byte `json:"body"`
-}
-
 type ExecResult struct {
 	ID   string `json:"id"`
 	Resp []byte `json:"resp"`
@@ -25,14 +19,18 @@ type ExecResult struct {
 }
 
 type Executor struct {
-	f   *Flow
-	cli *asynq.Client
+	// id format: "flow_name:node_name:random_id"
+	ID   string `json:"id"`
+	Body []byte `json:"body"`
+
+	f *Flow `json:"-"`
+	t *asynq.Task
 }
 
-func (e *Executor) Execute(eInfo *ExecInfo) error {
+func (e *Executor) Execute() error {
 	f := e.f
 	logger := f.logger
-	flowName, nodeName, sessID, err := parseExecID(eInfo.ID)
+	flowName, nodeName, sessID, err := parseExecID(e.ID)
 	if err != nil {
 		return err
 	}
@@ -44,12 +42,14 @@ func (e *Executor) Execute(eInfo *ExecInfo) error {
 		return errors.Newf("inconsist flow name: %s != %s", flowName, f.Name)
 	}
 	node := dagNode.(*FlowNode) // nolint
-	resp, err := node.fn(eInfo.Body, nil)
+	resp, err := node.fn(e.Body, nil)
 	if err != nil {
 		return err
 	}
-	if err := e.setExecResult(&ExecResult{ID: eInfo.ID, Resp: resp, Err: ""}); err != nil {
-		return errors.Wrapf(err, "failed to set result for %s", eInfo.ID)
+	eRes := &ExecResult{ID: e.ID, Resp: resp, Err: ""}
+
+	if err := e.setExecResult(eRes); err != nil {
+		return errors.Wrapf(err, "failed to set result for %s", e.ID)
 	}
 	// submit children
 	logger.Debug("submit children", "node", nodeName)
@@ -66,7 +66,10 @@ func (e *Executor) submitChildren(node *FlowNode, sessID string) error {
 	for _, dagChild := range childMap {
 		child := dagChild.(*FlowNode) // nolint
 		logger.Debug("submit node", "node", child.name)
-		if _, err := e.submitNode(child, sessID); err != nil {
+		if _, err := e.submitNode(child, sessID, nil); err != nil {
+			if errors.Is(err, types.ErrExecHasDependency) {
+				continue
+			}
 			return err
 		}
 	}
@@ -79,20 +82,39 @@ func (e *Executor) submitRoots(body []byte) (sessID string, err error) {
 	roots := f.DAG.GetRoots()
 	for _, root := range roots {
 		node := root.(*FlowNode) // nolint
-		eInfo := &ExecInfo{
-			ID:   newExecID(f.Name, node.name, sessID),
-			Body: body,
-		}
-		bs, _ := json.Marshal(eInfo)
-		asynT := asynq.NewTask(f.Name, bs, asynq.TaskID(eInfo.ID))
-		if _, err := e.cli.Enqueue(asynT, nil); err != nil {
+		if _, err := e.submitNode(node, sessID, body); err != nil {
 			return "", err
 		}
 	}
 	return sessID, nil
 }
 
-func (e *Executor) submitNode(node *FlowNode, sessID string) (*asynq.TaskInfo, error) {
+func (e *Executor) submitNode(node *FlowNode, sessID string, body []byte) (*asynq.TaskInfo, error) {
+	f := e.f
+	cli := f.cli
+	cfg := f.cfg
+	var err error
+	if body == nil {
+		if body, err = e.getAggData(node, sessID); err != nil {
+			return nil, err
+		}
+	}
+	newExec := &Executor{
+		ID:   newExecID(f.Name, node.name, sessID),
+		Body: body,
+	}
+	bs, _ := json.Marshal(newExec)
+	asynT := asynq.NewTask(f.Name, bs)
+	opts := []asynq.Option{
+		asynq.TaskID(newExec.ID),
+		asynq.MaxRetry(cfg.RetryCount),
+		asynq.Retention(cfg.Timeout),
+		asynq.Timeout(cfg.Timeout),
+	}
+	return cli.Enqueue(asynT, opts...)
+}
+
+func (e Executor) getAggData(node *FlowNode, sessID string) ([]byte, error) {
 	f := e.f
 	logger := f.logger
 	parents, err := f.DAG.GetParents(node.name)
@@ -119,16 +141,7 @@ func (e *Executor) submitNode(node *FlowNode, sessID string) (*asynq.TaskInfo, e
 	} else {
 		body, err = randomAgg(aggData)
 	}
-	if err != nil {
-		return nil, err
-	}
-	eInfo := &ExecInfo{
-		ID:   newExecID(f.Name, node.name, sessID),
-		Body: body,
-	}
-	bs, _ := json.Marshal(eInfo)
-	asynT := asynq.NewTask(f.Name, bs)
-	return e.cli.Enqueue(asynT, nil)
+	return body, errors.Wrapf(err, "failed to aggregate parent node's response")
 }
 
 func (e *Executor) getLeavesResult(sessID string) (map[string]*ExecResult, error) {
@@ -148,23 +161,39 @@ func (e *Executor) getLeavesResult(sessID string) (map[string]*ExecResult, error
 }
 
 func (e *Executor) setExecResult(eRes *ExecResult) error {
+	cfg := e.f.cfg
 	bs, err := json.Marshal(eRes)
 	if err != nil {
 		return err
 	}
-	return e.f.stor.Set(context.TODO(), eRes.ID, bs)
+	if cfg.UseAsynqStore {
+		_, err = e.t.ResultWriter().Write(bs)
+	} else {
+		err = e.f.stor.Set(context.TODO(), eRes.ID, bs)
+	}
+	return err
 }
 
-func (e *Executor) getExecResult(execID string) (*ExecResult, error) {
+func (e *Executor) getExecResult(execID string) (eRes *ExecResult, err error) {
+	var bs []byte
 	f := e.f
-	bs, err := f.stor.Get(context.TODO(), execID)
+	cfg := e.f.cfg
+	if cfg.UseAsynqStore {
+		ti, err := f.insp.GetTaskInfo("default", execID)
+		if err != nil {
+			return nil, err
+		}
+		bs = ti.Result
+	} else {
+		bs, err = f.stor.Get(context.TODO(), execID)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if bs == nil {
 		return nil, nil
 	}
-	eRes := &ExecResult{}
+	eRes = &ExecResult{}
 	if err := json.Unmarshal(bs, eRes); err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal json for ExecResult")
 	}

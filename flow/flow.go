@@ -9,6 +9,7 @@ import (
 	"github.com/heimdalr/dag"
 	"github.com/hibiken/asynq"
 	"github.com/yuyang0/dagflow/store"
+	"github.com/yuyang0/dagflow/types"
 )
 
 type NodeFunc func([]byte, map[string][]string) ([]byte, error)
@@ -19,15 +20,22 @@ type Flow struct {
 	stor   store.Store
 	cli    *asynq.Client
 	logger *slog.Logger
+	cfg    *types.Config
+	insp   *asynq.Inspector
 }
 
-func New(name string, stor store.Store, cli *asynq.Client, logger *slog.Logger) *Flow {
+func New(
+	name string, stor store.Store, cli *asynq.Client,
+	logger *slog.Logger, cfg *types.Config, insp *asynq.Inspector,
+) *Flow {
 	return &Flow{
 		Name:   name,
 		DAG:    dag.NewDAG(),
 		stor:   stor,
 		cli:    cli,
 		logger: logger,
+		cfg:    cfg,
+		insp:   insp,
 	}
 }
 
@@ -59,32 +67,29 @@ func (f *Flow) Register(mux *asynq.ServeMux) {
 
 func (f *Flow) Submit(body []byte) (string, error) {
 	e := &Executor{
-		f:   f,
-		cli: f.cli,
+		f: f,
 	}
 	return e.submitRoots(body)
 }
 
 func (f *Flow) GetResult(sessID string) (map[string]*ExecResult, error) {
 	e := &Executor{
-		f:   f,
-		cli: f.cli,
+		f: f,
 	}
 	return e.getLeavesResult(sessID)
 }
 
 func (f *Flow) asynqHandler() asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
-		eInfo := &ExecInfo{}
-		if err := json.Unmarshal(t.Payload(), eInfo); err != nil {
+		e := &Executor{
+			f: f,
+			t: t,
+		}
+		if err := json.Unmarshal(t.Payload(), e); err != nil {
 			return errors.Wrapf(err, "filed to unmarshal payload")
 		}
-		e := &Executor{
-			f:   f,
-			cli: f.cli,
-		}
-		if err := e.Execute(eInfo); err != nil {
-			f.logger.Error("failed to run task", "execID", eInfo.ID, "err", err)
+		if err := e.Execute(); err != nil {
+			f.logger.Error("failed to run task", "execID", e.ID, "err", err)
 			return err
 		}
 		return nil

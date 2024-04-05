@@ -13,17 +13,15 @@ import (
 const redisAddr = "127.0.0.1:6379"
 
 func main() {
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
-	defer client.Close()
 	svc, err := service.New(&types.Config{
 		Store: types.StoreConfig{
 			Type: "redis",
 			Redis: types.RedisConfig{
-				Addr:   "127.0.0.1:6379",
+				Addr:   redisAddr,
 				Expire: 120,
 			},
 		},
-	}, client, nil)
+	}, nil)
 	if err != nil {
 		log.Fatal("failed to create service", err)
 	}

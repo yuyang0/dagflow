@@ -17,9 +17,15 @@ type Service struct {
 	cli    *asynq.Client
 	stor   store.Store
 	logger *slog.Logger
+	cfg    *types.Config
+	insp   *asynq.Inspector
 }
 
-func New(cfg *types.Config, cli *asynq.Client, logger *slog.Logger) (*Service, error) {
+func New(cfg *types.Config, logger *slog.Logger) (*Service, error) {
+	if err := cfg.Refine(); err != nil {
+		return nil, err
+	}
+	cli, insp := prepareAsynqClientAndInspector(&cfg.Redis)
 	stor, err := factory.NewStore(&cfg.Store)
 	if err != nil {
 		return nil, err
@@ -32,12 +38,14 @@ func New(cfg *types.Config, cli *asynq.Client, logger *slog.Logger) (*Service, e
 		stor:   stor,
 		cli:    cli,
 		logger: logger,
+		cfg:    cfg,
+		insp:   insp,
 	}
 	return svc, nil
 }
 
 func (svc *Service) NewFlow(flowName string) (*flow.Flow, error) {
-	flow := flow.New(flowName, svc.stor, svc.cli, svc.logger)
+	flow := flow.New(flowName, svc.stor, svc.cli, svc.logger, svc.cfg, svc.insp)
 	return flow, nil
 }
 
@@ -64,4 +72,29 @@ func (svc *Service) RegisterFlows(mux *asynq.ServeMux, flows ...*flow.Flow) erro
 		svc.flows.Set(flow.Name, flow)
 	}
 	return nil
+}
+
+func prepareAsynqClientAndInspector(rCfg *types.RedisConfig) (*asynq.Client, *asynq.Inspector) {
+	var (
+		rOpt asynq.RedisConnOpt
+	)
+	if len(rCfg.SentinelAddrs) == 0 {
+		rOpt = asynq.RedisClientOpt{
+			Addr:     rCfg.Addr,
+			DB:       rCfg.DB,
+			Username: rCfg.Username,
+			Password: rCfg.Password,
+		}
+	} else {
+		rOpt = asynq.RedisFailoverClientOpt{
+			SentinelAddrs: rCfg.SentinelAddrs,
+			MasterName:    rCfg.MasterName,
+			DB:            rCfg.DB,
+			Username:      rCfg.Username,
+			Password:      rCfg.Password,
+		}
+	}
+	cli := asynq.NewClient(rOpt)
+	insp := asynq.NewInspector(rOpt)
+	return cli, insp
 }

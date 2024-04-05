@@ -22,8 +22,6 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
-	defer client.Close()
 	svc, err := service.New(&types.Config{
 		Store: types.StoreConfig{
 			Type: "redis",
@@ -32,7 +30,7 @@ func main() {
 				Expire: 120,
 			},
 		},
-	}, client, logger)
+	}, logger)
 	if err != nil {
 		log.Fatal("failed to create service", err)
 	}
