@@ -9,7 +9,7 @@
 a DAG task engine based on asynq
 
 ## QuickStart
-1. prepare asynq server mux and client
+1. prepare asynq server mux
     ```golang
     srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
@@ -26,8 +26,6 @@ a DAG task engine based on asynq
 		},
 	)
     mux := asynq.NewServeMux()
-    client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
-    defer client.Close()
     ```
     please refer to asynq's doc to figure out more config options.
 2. create dagflow service
