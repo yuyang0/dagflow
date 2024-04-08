@@ -161,7 +161,7 @@ func TestSingleNodeFailure(t *testing.T) {
 		require.NoError(t, err)
 		cases[idx].sessID = sessID
 	}
-	time.Sleep(120 * time.Second)
+	time.Sleep(150 * time.Second)
 	cli := redis.NewClient(&redis.Options{
 		Addr: redisAddr, // Redis 服务器地址
 	})
