@@ -84,6 +84,9 @@ func (f *Flow) Edge(src, dst string) error {
 }
 
 func (f *Flow) Register(mux *asynq.ServeMux) {
+	if mux == nil {
+		return
+	}
 	mux.HandleFunc(f.Name, f.asynqHandler())
 }
 
