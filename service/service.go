@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
@@ -74,6 +75,20 @@ func (svc *Service) RegisterFlows(mux *asynq.ServeMux, flows ...*flow.Flow) erro
 	return nil
 }
 
+func (svc *Service) RegisterFlowsWithDefinitor(mux *asynq.ServeMux, flows map[string]flow.Definitor) error {
+	for name, defHandler := range flows {
+		flow, err := svc.NewFlow(name)
+		if err != nil {
+			return err
+		}
+		if err := defHandler(context.TODO(), flow); err != nil {
+			return err
+		}
+		flow.Register(mux)
+		svc.flows.Set(flow.Name, flow)
+	}
+	return nil
+}
 func prepareAsynqClientAndInspector(rCfg *types.RedisConfig) (*asynq.Client, *asynq.Inspector) {
 	var (
 		rOpt asynq.RedisConnOpt

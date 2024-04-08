@@ -195,11 +195,6 @@ func TestMutipleNodes(t *testing.T) {
 		},
 	}, nil)
 	require.NoError(t, err)
-	flowName := "f2"
-	f, err := svc.NewFlow(flowName)
-	require.NoError(t, err)
-	err = prepareMultipleNodeFlow(f)
-	require.NoError(t, err)
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
@@ -216,7 +211,12 @@ func TestMutipleNodes(t *testing.T) {
 		},
 	)
 	mux := asynq.NewServeMux()
-	svc.RegisterFlows(mux, f)
+
+	flowName := "f2"
+	err = svc.RegisterFlowsWithDefinitor(mux, map[string]flow.Definitor{
+		flowName: prepareMultipleNodeFlow,
+	})
+	require.NoError(t, err)
 	// ...register other handlers...
 
 	go func() {
@@ -298,7 +298,7 @@ func aggFn(dataMap map[string][]byte) ([]byte, error) {
 	return json.Marshal(i1 * i2)
 }
 
-func prepareMultipleNodeFlow(f *flow.Flow) error {
+func prepareMultipleNodeFlow(_ context.Context, f *flow.Flow) error {
 	if err := f.Node("l1n1", incOp); err != nil {
 		return err
 	}

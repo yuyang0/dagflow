@@ -14,6 +14,7 @@ import (
 
 type NodeFunc func([]byte, map[string][]string) ([]byte, error)
 type SwitchCondFunc func([]byte) string
+type Definitor func(ctx context.Context, f *Flow) error
 
 type Flow struct {
 	Name   string
