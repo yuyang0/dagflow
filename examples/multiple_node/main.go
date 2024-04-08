@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -23,22 +24,19 @@ func main() {
 	}))
 
 	svc, err := service.New(&types.Config{
-		Store: types.StoreConfig{
-			Type: "redis",
-			Redis: types.RedisConfig{
-				Addr:   redisAddr,
-				Expire: 120,
-			},
+		Redis: types.RedisConfig{
+			Addr:   redisAddr,
+			Expire: 120,
 		},
 	}, logger)
 	if err != nil {
 		log.Fatal("failed to create service", err)
 	}
-	f, err := svc.NewFlow("f2")
-	if err != nil {
-		log.Fatal("failed to create flow", err)
-	}
-	if prepareFlow(f); err != nil {
+	flowName := "f2"
+	mux := asynq.NewServeMux()
+	if err := svc.RegisterFlowsWithDefinitor(mux, map[string]flow.Definitor{
+		flowName: prepareFlow,
+	}); err != nil {
 		log.Fatal("failed to prepare flow", err)
 	}
 	srv := asynq.NewServer(
@@ -55,8 +53,6 @@ func main() {
 			// See the godoc for other configuration options
 		},
 	)
-	mux := asynq.NewServeMux()
-	svc.RegisterFlows(mux, f)
 	// ...register other handlers...
 
 	var wg sync.WaitGroup
@@ -128,7 +124,7 @@ func aggFn(dataMap map[string][]byte) ([]byte, error) {
 	return json.Marshal(i1 * i2)
 }
 
-func prepareFlow(f *flow.Flow) error {
+func prepareFlow(_ context.Context, f *flow.Flow) error {
 	if err := f.Node("l1n1", incOp); err != nil {
 		return err
 	}

@@ -14,12 +14,9 @@ const redisAddr = "127.0.0.1:6379"
 
 func main() {
 	svc, err := service.New(&types.Config{
-		Store: types.StoreConfig{
-			Type: "redis",
-			Redis: types.RedisConfig{
-				Addr:   redisAddr,
-				Expire: 120,
-			},
+		Redis: types.RedisConfig{
+			Addr:   redisAddr,
+			Expire: 120,
 		},
 	}, nil)
 	if err != nil {

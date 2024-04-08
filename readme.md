@@ -9,6 +9,7 @@
 a DAG task engine based on asynq
 
 ## QuickStart
+### server side
 1. prepare asynq server mux
     ```golang
     srv := asynq.NewServer(
@@ -52,6 +53,7 @@ a DAG task engine based on asynq
 	if err = f.Node("n1", incOp); err != nil {
 		log.Fatal("failed to create node", err)
     }
+    // for complex dag, you can use RegisterFlowsWithDefinitor
     svc.RegisterFlows(mux, f)
     ```
 4. start asynq server
@@ -60,7 +62,35 @@ a DAG task engine based on asynq
 		log.Fatalf("could not run server: %v", err)
 	}
     ```
-5. submit dagflow tasks
+### client side
+1. create dagflow service, same as step 2 in server side
+    ```golang
+    svc, err := service.New(&types.Config{
+		Redis: types.RedisConfig{
+			Addr:   "127.0.0.1:6379",
+			Expire: 120,
+		},
+	    Store: types.StoreConfig{
+		    Type: "redis",
+	    },
+    }, nil)
+    if err != nil {
+    	log.Fatal("failed to create service", err)
+    }
+    ```
+2. create a flow object and register it to dagflow service, same as step 3 in server side except `mux` should be set to `nil`
+    ```golang
+    f, err := svc.NewFlow("f1")
+	if err != nil {
+		log.Fatal("failed to create flow", err)
+	}
+	if err = f.Node("n1", incOp); err != nil {
+		log.Fatal("failed to create node", err)
+    }
+    // for complex dag, you can use RegisterFlowsWithDefinitor
+    svc.RegisterFlows(nil, f)
+    ```
+3. submit dagflow tasks
     ```golang
     svc.Submit("f1", []byte(`1`))
     ```
