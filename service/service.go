@@ -27,9 +27,14 @@ func New(cfg *types.Config, logger *slog.Logger) (*Service, error) {
 		return nil, err
 	}
 	cli, insp := prepareAsynqClientAndInspector(&cfg.Redis)
-	stor, err := factory.NewStore(&cfg.Store)
-	if err != nil {
-		return nil, err
+	var (
+		stor store.Store
+		err  error
+	)
+	if cfg.UseCustomStore {
+		if stor, err = factory.NewStore(&cfg.Store); err != nil {
+			return nil, err
+		}
 	}
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
