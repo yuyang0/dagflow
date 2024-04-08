@@ -177,10 +177,10 @@ func (e *Executor) setExecResult(ctx context.Context, eRes *ExecResult) error {
 	if err != nil {
 		return err
 	}
-	if cfg.UseAsynqStore {
-		_, err = e.t.ResultWriter().Write(bs)
-	} else {
+	if cfg.UseCustomStore {
 		err = e.f.stor.Set(ctx, eRes.ID, bs)
+	} else {
+		_, err = e.t.ResultWriter().Write(bs)
 	}
 	return err
 }
@@ -189,14 +189,14 @@ func (e *Executor) getExecResult(execID string) (eRes *ExecResult, err error) {
 	var bs []byte
 	f := e.f
 	cfg := e.f.cfg
-	if cfg.UseAsynqStore {
+	if cfg.UseCustomStore {
+		bs, err = f.stor.Get(context.TODO(), execID)
+	} else {
 		ti, err := f.insp.GetTaskInfo("default", execID)
 		if err != nil {
 			return nil, err
 		}
 		bs = ti.Result
-	} else {
-		bs, err = f.stor.Get(context.TODO(), execID)
 	}
 	if err != nil {
 		return nil, err

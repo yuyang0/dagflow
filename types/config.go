@@ -8,12 +8,15 @@ import (
 )
 
 type Config struct {
-	Store StoreConfig `json:"store"`
+	// dagflow stores result in asynq's taskinfo by default,
+	// if you want to store result in your own storage, set this to true
+	// and also set the store config properly.
+	UseCustomStore bool        `json:"useCustomStore"`
+	Store          StoreConfig `json:"store"`
 	// some configs related to asynq
-	Redis         RedisConfig   `json:"redis"`
-	UseAsynqStore bool          `json:"useAsynqStore" default:"true"`
-	RetryCount    int           `json:"retryCount" default:"30"`
-	Timeout       time.Duration `json:"timeout" default:"5h"`
+	Redis      RedisConfig   `json:"redis"`
+	RetryCount int           `json:"retryCount" default:"30"`
+	Timeout    time.Duration `json:"timeout" default:"5h"`
 }
 
 type StoreConfig struct {
@@ -41,7 +44,9 @@ func (cfg *Config) Refine() error {
 	if err := cfg.Redis.check(); err != nil {
 		return err
 	}
-	if cfg.Store.Redis.Addr == "" && len(cfg.Store.Redis.SentinelAddrs) == 0 {
+	if cfg.UseCustomStore &&
+		cfg.Store.Redis.Addr == "" &&
+		len(cfg.Store.Redis.SentinelAddrs) == 0 {
 		cfg.Store.Redis = cfg.Redis
 	}
 	defaults.SetDefaults(cfg)
