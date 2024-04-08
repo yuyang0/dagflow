@@ -19,26 +19,8 @@ import (
 const redisAddr = "127.0.0.1:6379"
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
 
-	svc, err := service.New(&types.Config{
-		Redis: types.RedisConfig{
-			Addr:   redisAddr,
-			Expire: 120,
-		},
-	}, logger)
-	if err != nil {
-		log.Fatal("failed to create service", err)
-	}
-	flowName := "f2"
 	mux := asynq.NewServeMux()
-	if err := svc.RegisterFlowsWithDefinitor(mux, map[string]flow.Definitor{
-		flowName: prepareFlow,
-	}); err != nil {
-		log.Fatal("failed to prepare flow", err)
-	}
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
 		asynq.Config{
@@ -53,6 +35,8 @@ func main() {
 			// See the godoc for other configuration options
 		},
 	)
+	flowName := "f2"
+	createSvc(mux, flowName)
 	// ...register other handlers...
 
 	var wg sync.WaitGroup
@@ -63,14 +47,15 @@ func main() {
 			log.Fatalf("could not run server: %v", err)
 		}
 	}()
+	clientSVC := createClientSVC(flowName)
 	intialV := 10
 	expectV := (10 + 1 + 1) * (10 + 1 - 1) * 2
-	sessID, err := svc.Submit("f2", []byte(fmt.Sprintf(`%d`, intialV)))
+	sessID, err := clientSVC.Submit("f2", []byte(fmt.Sprintf(`%d`, intialV)))
 	if err != nil {
 		log.Fatal("failed to submit task", err)
 	}
 	time.Sleep(15 * time.Second)
-	resMap, err := svc.GetResult("f2", sessID)
+	resMap, err := clientSVC.GetResult("f2", sessID)
 	if err != nil {
 		log.Fatal("failed to get result", err)
 	}
@@ -83,6 +68,31 @@ func main() {
 	wg.Wait()
 }
 
+func createSvc(mux *asynq.ServeMux, flowName string) *service.Service {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	svc, err := service.New(&types.Config{
+		Redis: types.RedisConfig{
+			Addr:   redisAddr,
+			Expire: 120,
+		},
+	}, logger)
+	if err != nil {
+		log.Fatal("failed to create service", err)
+	}
+	if err := svc.RegisterFlowsWithDefinitor(mux, map[string]flow.Definitor{
+		flowName: prepareFlow,
+	}); err != nil {
+		log.Fatal("failed to prepare flow", err)
+	}
+	return svc
+}
+
+func createClientSVC(flowName string) *service.Service {
+	svc := createSvc(nil, flowName)
+	return svc
+}
 func incOp(data []byte, option map[string][]string) ([]byte, error) {
 	var i int
 	if err := json.Unmarshal(data, &i); err != nil {

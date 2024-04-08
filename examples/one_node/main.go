@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/hibiken/asynq"
+	"github.com/yuyang0/dagflow/flow"
 	"github.com/yuyang0/dagflow/service"
 	"github.com/yuyang0/dagflow/types"
 )
@@ -13,24 +14,6 @@ import (
 const redisAddr = "127.0.0.1:6379"
 
 func main() {
-	svc, err := service.New(&types.Config{
-		Redis: types.RedisConfig{
-			Addr:   redisAddr,
-			Expire: 120,
-		},
-	}, nil)
-	if err != nil {
-		log.Fatal("failed to create service", err)
-	}
-	f, err := svc.NewFlow("f1")
-	if err != nil {
-		log.Fatal("failed to create flow", err)
-	}
-	err = f.Node("n1", incOp)
-	if err != nil {
-		log.Fatal("failed to create node", err)
-	}
-
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
 		asynq.Config{
@@ -46,7 +29,8 @@ func main() {
 		},
 	)
 	mux := asynq.NewServeMux()
-	svc.RegisterFlows(mux, f)
+	flowName, nodeName := "f1", "n1"
+	createSvcAndFlow(mux, flowName, nodeName)
 	// ...register other handlers...
 
 	var wg sync.WaitGroup
@@ -57,8 +41,40 @@ func main() {
 			log.Fatalf("could not run server: %v", err)
 		}
 	}()
-	svc.Submit("f1", []byte(`1`))
+	clientSVC := createClientSVC(flowName, nodeName)
+	if _, err := clientSVC.Submit(flowName, []byte(`1`)); err != nil {
+		log.Fatal("failed to submit task", err)
+	}
 	wg.Wait()
+}
+
+func createSvcAndFlow(mux *asynq.ServeMux, flowName, nodeName string) (*service.Service, *flow.Flow) {
+	svc, err := service.New(&types.Config{
+		Redis: types.RedisConfig{
+			Addr:   redisAddr,
+			Expire: 120,
+		},
+	}, nil)
+	if err != nil {
+		log.Fatal("failed to create service", err)
+	}
+	f, err := svc.NewFlow(flowName)
+	if err != nil {
+		log.Fatal("failed to create flow", err)
+	}
+	err = f.Node(nodeName, incOp)
+	if err != nil {
+		log.Fatal("failed to create node", err)
+	}
+	if err := svc.RegisterFlows(mux, f); err != nil {
+		log.Fatalf("failed to register flow: %v", err)
+	}
+	return svc, f
+}
+
+func createClientSVC(flowName, nodeName string) *service.Service {
+	svc, _ := createSvcAndFlow(nil, flowName, nodeName)
+	return svc
 }
 
 func incOp(data []byte, option map[string][]string) ([]byte, error) {
