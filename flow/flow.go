@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/heimdalr/dag"
 	"github.com/hibiken/asynq"
 	"github.com/yuyang0/dagflow/store"
 	"github.com/yuyang0/dagflow/types"
+)
+
+const (
+	nameSep = ":"
 )
 
 type NodeFunc func([]byte, map[string][]string) ([]byte, error)
@@ -29,7 +34,10 @@ type Flow struct {
 func New(
 	name string, stor store.Store, cli *asynq.Client,
 	logger *slog.Logger, cfg *types.Config, insp *asynq.Inspector,
-) *Flow {
+) (*Flow, error) {
+	if strings.Contains(name, nameSep) {
+		return nil, errors.Newf("flow name can't contain %s", nameSep)
+	}
 	return &Flow{
 		Name:   name,
 		DAG:    dag.NewDAG(),
@@ -38,7 +46,7 @@ func New(
 		logger: logger,
 		cfg:    cfg,
 		insp:   insp,
-	}
+	}, nil
 }
 
 type flowNode struct {
@@ -52,6 +60,9 @@ type flowNode struct {
 }
 
 func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
+	if strings.Contains(name, nameSep) {
+		return errors.Newf("dag node name can't contain %s", nameSep)
+	}
 	execOpts := &ExecutionOptions{}
 	for _, opt := range opts {
 		opt(execOpts)
@@ -67,6 +78,9 @@ func (f *Flow) SwitchNode(
 	name string, condFn SwitchCondFunc,
 	cases map[string]NodeFunc, opts ...Option,
 ) error {
+	if strings.Contains(name, nameSep) {
+		return errors.Newf("dag node name can't contain %s", nameSep)
+	}
 	execOpts := &ExecutionOptions{}
 	for _, opt := range opts {
 		opt(execOpts)
@@ -80,6 +94,12 @@ func (f *Flow) SwitchNode(
 }
 
 func (f *Flow) Edge(src, dst string) error {
+	if strings.Contains(src, nameSep) {
+		return errors.Newf("dag src node name can't contain %s", nameSep)
+	}
+	if strings.Contains(dst, nameSep) {
+		return errors.Newf("dag dst node name can't contain %s", nameSep)
+	}
 	return f.DAG.AddEdge(src, dst)
 }
 

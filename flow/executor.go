@@ -212,11 +212,11 @@ func (e *Executor) getExecResult(execID string) (eRes *ExecResult, err error) {
 }
 
 func newExecID(flowName, nodeName, randomID string) string {
-	return fmt.Sprintf("%s:%s:%s", flowName, nodeName, randomID)
+	return fmt.Sprintf("%s%s%s%s%s", flowName, nameSep, nodeName, nameSep, randomID)
 }
 
 func parseExecID(execID string) (flowName string, nodeName string, sessID string, err error) {
-	parts := strings.Split(execID, ":")
+	parts := strings.Split(execID, nameSep)
 	if len(parts) != 3 {
 		err = errors.Newf("failed to parse execution id")
 		return

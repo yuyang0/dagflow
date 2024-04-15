@@ -51,8 +51,7 @@ func New(cfg *types.Config, logger *slog.Logger) (*Service, error) {
 }
 
 func (svc *Service) NewFlow(flowName string) (*flow.Flow, error) {
-	flow := flow.New(flowName, svc.stor, svc.cli, svc.logger, svc.cfg, svc.insp)
-	return flow, nil
+	return flow.New(flowName, svc.stor, svc.cli, svc.logger, svc.cfg, svc.insp)
 }
 
 // submit a flow task

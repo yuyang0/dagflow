@@ -4,11 +4,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDAG(t *testing.T) {
 	// TODO
-	f := New("flow1", nil, nil, nil, nil, nil)
+	f, err := New("flow1", nil, nil, nil, nil, nil)
+	require.NoError(t, err)
 	f.Node("l1n1", nil)
 	f.Node("l2n1", nil)
 	f.Node("l2n2", nil)
