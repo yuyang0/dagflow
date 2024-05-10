@@ -20,7 +20,8 @@ type ExecutionOptions struct {
 	aggregator Aggregator
 	// forwarder      Forwarder
 	// noForwarder    bool
-	failureHandler FuncErrorHandler
+	failureHandler      FuncErrorHandler
+	finalFailureHandler FuncErrorHandler
 }
 
 type Option func(*ExecutionOptions)
@@ -34,6 +35,12 @@ func WithAggregator(agg Aggregator) Option {
 func WithFailureHandler(fn FuncErrorHandler) Option {
 	return func(o *ExecutionOptions) {
 		o.failureHandler = fn
+	}
+}
+
+func WithFinalFailureHandler(fn FuncErrorHandler) Option {
+	return func(o *ExecutionOptions) {
+		o.finalFailureHandler = fn
 	}
 }
 

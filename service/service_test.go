@@ -103,6 +103,7 @@ func TestSingleNodeFailure(t *testing.T) {
 		Store: types.StoreConfig{
 			Type: "redis",
 		},
+		RetryCount: 2,
 	}, nil)
 	require.NoError(t, err)
 	flowName := "f1"
@@ -135,6 +136,11 @@ func TestSingleNodeFailure(t *testing.T) {
 				"low":      1,
 			},
 			// See the godoc for other configuration options
+			ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, t *asynq.Task, err error) {
+				retried, _ := asynq.GetRetryCount(ctx)
+				maxRetry, _ := asynq.GetMaxRetry(ctx)
+				fmt.Printf("********* retried: %d, maxRetry: %d\n", retried, maxRetry)
+			}),
 		},
 	)
 	mux := asynq.NewServeMux()
@@ -171,6 +177,7 @@ func TestSingleNodeFailure(t *testing.T) {
 		require.Len(t, resMap, 1)
 		for k, v := range resMap {
 			require.Equal(t, k, "n1")
+			require.Empty(t, v.Err)
 			var i int
 			err := json.Unmarshal(v.Resp, &i)
 			require.NoError(t, err)

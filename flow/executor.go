@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/hibiken/asynq"
 	"github.com/yuyang0/dagflow/types"
+	"github.com/yuyang0/dagflow/utils"
 	"github.com/yuyang0/dagflow/utils/idgen"
 )
 
@@ -30,7 +31,7 @@ type Executor struct {
 func (e *Executor) Execute(ctx context.Context) error {
 	f := e.f
 	logger := f.logger
-	flowName, nodeName, sessID, err := parseExecID(e.ID)
+	flowName, nodeName, sessID, err := ParseExecID(e.ID)
 	if err != nil {
 		return err
 	}
@@ -51,11 +52,33 @@ func (e *Executor) Execute(ctx context.Context) error {
 		return errors.Newf("failed to get function for node: %s", nodeName)
 	}
 	resp, err := nodeFn(e.Body, nil)
-	if err != nil {
-		if node.execOpts.failureHandler != nil {
-			err = node.execOpts.failureHandler(err)
-		}
-		return err
+	if err != nil { //nolint
+		return utils.Invoke(func() (err3 error) {
+			retried, _ := asynq.GetRetryCount(ctx)
+			maxRetry, _ := asynq.GetMaxRetry(ctx)
+			logger.Debug("exec failed", "retried", retried, "maxRetry", maxRetry, "err", err)
+			defer func() {
+				if retried >= maxRetry {
+					eRes := &ExecResult{ID: e.ID, Resp: resp, Err: err3.Error()}
+					if err := e.setExecResult(ctx, eRes); err != nil {
+						logger.Error("failed to set result", "execID", e.ID, "err", err.Error())
+					}
+				}
+			}()
+			if node.execOpts.failureHandler != nil {
+				if err1 := node.execOpts.failureHandler(err); err1 != nil {
+					return errors.CombineErrors(err, err1)
+				}
+			}
+			if retried >= maxRetry {
+				if node.execOpts.finalFailureHandler != nil {
+					if err2 := node.execOpts.finalFailureHandler(err); err2 != nil {
+						return errors.CombineErrors(err, err2)
+					}
+				}
+			}
+			return err
+		})
 	}
 	eRes := &ExecResult{ID: e.ID, Resp: resp, Err: ""}
 
@@ -215,7 +238,7 @@ func newExecID(flowName, nodeName, randomID string) string {
 	return fmt.Sprintf("%s%s%s%s%s", flowName, nameSep, nodeName, nameSep, randomID)
 }
 
-func parseExecID(execID string) (flowName string, nodeName string, sessID string, err error) {
+func ParseExecID(execID string) (flowName string, nodeName string, sessID string, err error) {
 	parts := strings.Split(execID, nameSep)
 	if len(parts) != 3 {
 		err = errors.Newf("failed to parse execution id")
