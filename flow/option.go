@@ -14,7 +14,7 @@ type Forwarder func([]byte) []byte
 // ForEach definition for the foreach function
 type ForEach func([]byte) map[string][]byte
 
-type FuncErrorHandler func(error) error
+type FuncErrorHandler func([]byte, error) error
 
 type ExecutionOptions struct {
 	aggregator Aggregator

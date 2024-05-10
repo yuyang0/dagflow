@@ -66,13 +66,13 @@ func (e *Executor) Execute(ctx context.Context) error {
 				}
 			}()
 			if node.execOpts.failureHandler != nil {
-				if err1 := node.execOpts.failureHandler(err); err1 != nil {
+				if err1 := node.execOpts.failureHandler(e.Body, err); err1 != nil {
 					return errors.CombineErrors(err, err1)
 				}
 			}
 			if retried >= maxRetry {
 				if node.execOpts.finalFailureHandler != nil {
-					if err2 := node.execOpts.finalFailureHandler(err); err2 != nil {
+					if err2 := node.execOpts.finalFailureHandler(e.Body, err); err2 != nil {
 						return errors.CombineErrors(err, err2)
 					}
 				}
