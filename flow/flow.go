@@ -19,6 +19,7 @@ const (
 
 type NodeFunc func([]byte, map[string][]string) ([]byte, error)
 type SwitchCondFunc func([]byte) string
+type IfCondFunc func([]byte) bool
 type Definitor func(ctx context.Context, f *Flow) error
 
 type Flow struct {
@@ -49,14 +50,61 @@ func New(
 	}, nil
 }
 
-type flowNode struct {
-	name     string
-	fn       NodeFunc
-	execOpts *ExecutionOptions
+type flowNode interface {
+	Name() string
+	ExecutionOptions() *ExecutionOptions
+	Execute(data []byte, option map[string][]string) ([]byte, error)
+}
 
-	// for switch node
+type flowBaseNode struct {
+	name     string
+	execOpts *ExecutionOptions
+}
+
+func (f *flowBaseNode) Name() string {
+	return f.name
+}
+
+func (f *flowBaseNode) ExecutionOptions() *ExecutionOptions {
+	return f.execOpts
+}
+
+type flowSimpleNode struct {
+	flowBaseNode
+	fn NodeFunc
+}
+
+func (f *flowSimpleNode) Execute(data []byte, option map[string][]string) ([]byte, error) {
+	return f.fn(data, option)
+}
+
+type flowSwitchNode struct {
+	flowBaseNode
 	condFn SwitchCondFunc
 	cases  map[string]NodeFunc
+}
+
+func (f *flowSwitchNode) Execute(data []byte, option map[string][]string) ([]byte, error) {
+	key := f.condFn(data)
+	fn := f.cases[key]
+	if fn == nil {
+		return nil, errors.Newf("failed to get function for key: %s", key)
+	}
+	return fn(data, option)
+}
+
+type flowIfNode struct {
+	flowBaseNode
+	condFn  IfCondFunc
+	trueFn  NodeFunc
+	falseFn NodeFunc
+}
+
+func (f *flowIfNode) Execute(data []byte, option map[string][]string) ([]byte, error) {
+	if f.condFn(data) {
+		return f.trueFn(data, option)
+	}
+	return f.falseFn(data, option)
 }
 
 func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
@@ -67,10 +115,12 @@ func (f *Flow) Node(name string, fn NodeFunc, opts ...Option) error {
 	for _, opt := range opts {
 		opt(execOpts)
 	}
-	return f.DAG.AddVertexByID(name, &flowNode{
-		name:     name,
-		fn:       fn,
-		execOpts: execOpts,
+	return f.DAG.AddVertexByID(name, &flowSimpleNode{
+		flowBaseNode: flowBaseNode{
+			name:     name,
+			execOpts: execOpts,
+		},
+		fn: fn,
 	})
 }
 
@@ -85,11 +135,34 @@ func (f *Flow) SwitchNode(
 	for _, opt := range opts {
 		opt(execOpts)
 	}
-	return f.DAG.AddVertexByID(name, &flowNode{
-		name:     name,
-		execOpts: execOpts,
-		condFn:   condFn,
-		cases:    cases,
+	return f.DAG.AddVertexByID(name, &flowSwitchNode{
+		flowBaseNode: flowBaseNode{
+			name:     name,
+			execOpts: execOpts,
+		},
+		condFn: condFn,
+		cases:  cases,
+	})
+}
+
+func (f *Flow) IfNode(
+	name string, condFn IfCondFunc, trueFn, falseFn NodeFunc, opts ...Option,
+) error {
+	if strings.Contains(name, nameSep) {
+		return errors.Newf("dag node name can't contain %s", nameSep)
+	}
+	execOpts := &ExecutionOptions{}
+	for _, opt := range opts {
+		opt(execOpts)
+	}
+	return f.DAG.AddVertexByID(name, &flowIfNode{
+		flowBaseNode: flowBaseNode{
+			name:     name,
+			execOpts: execOpts,
+		},
+		condFn:  condFn,
+		trueFn:  trueFn,
+		falseFn: falseFn,
 	})
 }
 

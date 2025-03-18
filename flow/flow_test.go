@@ -23,14 +23,19 @@ func TestDAG(t *testing.T) {
 	assert.Len(t, roots, 1)
 	for k := range roots {
 		assert.Equal(t, k, "l1n1")
+		v := roots[k]
+		node, ok := v.(flowNode)
+		assert.True(t, ok)
+		_, ok = node.(*flowSimpleNode)
+		assert.True(t, ok)
 	}
 	children, err := f.DAG.GetChildren("l1n1")
 	assert.Nil(t, err)
 	assert.Len(t, children, 2)
 	for k, v := range children {
-		node, ok := v.(*flowNode)
+		node, ok := v.(flowNode)
 		assert.True(t, ok)
-		assert.Equal(t, k, node.name)
+		assert.Equal(t, k, node.Name())
 		assert.True(t, k == "l2n1" || k == "l2n2")
 	}
 	parents, err := f.DAG.GetParents("l3n1")
@@ -38,9 +43,9 @@ func TestDAG(t *testing.T) {
 	assert.Len(t, parents, 2)
 
 	for k, v := range parents {
-		node, ok := v.(*flowNode)
+		node, ok := v.(flowNode)
 		assert.True(t, ok)
-		assert.Equal(t, k, node.name)
+		assert.Equal(t, k, node.Name())
 		assert.True(t, k == "l2n1" || k == "l2n2")
 	}
 	children, err = f.DAG.GetChildren("l3n1")

@@ -42,18 +42,11 @@ func (e *Executor) Execute(ctx context.Context) error {
 	if flowName != f.Name {
 		return errors.Newf("inconsist flow name: %s != %s", flowName, f.Name)
 	}
-	node := dagNode.(*flowNode) // nolint
-	nodeFn := node.fn
-	if node.condFn != nil {
-		key := node.condFn(e.Body)
-		nodeFn = node.cases[key]
-	}
-	if nodeFn == nil {
-		return errors.Newf("failed to get function for node: %s", nodeName)
-	}
-	resp, err := nodeFn(e.Body, nil)
+	node := dagNode.(flowNode) // nolint
+	resp, err := node.Execute(e.Body, nil)
 	if err != nil { //nolint
 		return utils.Invoke(func() (err3 error) {
+			execOpts := node.ExecutionOptions()
 			retried, _ := asynq.GetRetryCount(ctx)
 			maxRetry, _ := asynq.GetMaxRetry(ctx)
 			logger.Debug("exec failed", "retried", retried, "maxRetry", maxRetry, "err", err)
@@ -65,14 +58,14 @@ func (e *Executor) Execute(ctx context.Context) error {
 					}
 				}
 			}()
-			if node.execOpts.failureHandler != nil {
-				if err1 := node.execOpts.failureHandler(e.Body, err); err1 != nil {
+			if execOpts.failureHandler != nil {
+				if err1 := execOpts.failureHandler(e.Body, err); err1 != nil {
 					return errors.CombineErrors(err, err1)
 				}
 			}
 			if retried >= maxRetry {
-				if node.execOpts.finalFailureHandler != nil {
-					if err2 := node.execOpts.finalFailureHandler(e.Body, err); err2 != nil {
+				if execOpts.finalFailureHandler != nil {
+					if err2 := execOpts.finalFailureHandler(e.Body, err); err2 != nil {
 						return errors.CombineErrors(err, err2)
 					}
 				}
@@ -90,16 +83,16 @@ func (e *Executor) Execute(ctx context.Context) error {
 	return e.submitChildren(node, sessID)
 }
 
-func (e *Executor) submitChildren(node *flowNode, sessID string) error {
+func (e *Executor) submitChildren(node flowNode, sessID string) error {
 	f := e.f
 	logger := f.logger
-	childMap, err := f.DAG.GetChildren(node.name)
+	childMap, err := f.DAG.GetChildren(node.Name())
 	if err != nil {
 		return err
 	}
 	for _, dagChild := range childMap {
-		child := dagChild.(*flowNode) // nolint
-		logger.Debug("submit node", "node", child.name)
+		child := dagChild.(flowNode) // nolint
+		logger.Debug("submit node", "node", child.Name())
 		if _, err := e.submitNode(child, sessID, nil); err != nil {
 			if errors.Is(err, types.ErrExecHasDependency) {
 				continue
@@ -115,7 +108,7 @@ func (e *Executor) submitRoots(body []byte) (sessID string, err error) {
 	sessID = idgen.NextSID()
 	roots := f.DAG.GetRoots()
 	for _, root := range roots {
-		node := root.(*flowNode) // nolint
+		node := root.(flowNode) // nolint
 		if _, err := e.submitNode(node, sessID, body); err != nil {
 			return "", err
 		}
@@ -123,7 +116,7 @@ func (e *Executor) submitRoots(body []byte) (sessID string, err error) {
 	return sessID, nil
 }
 
-func (e *Executor) submitNode(node *flowNode, sessID string, body []byte) (*asynq.TaskInfo, error) { //nolint
+func (e *Executor) submitNode(node flowNode, sessID string, body []byte) (*asynq.TaskInfo, error) { //nolint
 	f := e.f
 	cli := f.cli
 	cfg := f.cfg
@@ -134,7 +127,7 @@ func (e *Executor) submitNode(node *flowNode, sessID string, body []byte) (*asyn
 		}
 	}
 	newExec := &Executor{
-		ID:   newExecID(f.Name, node.name, sessID),
+		ID:   newExecID(f.Name, node.Name(), sessID),
 		Body: body,
 	}
 	bs, _ := json.Marshal(newExec)
@@ -148,17 +141,17 @@ func (e *Executor) submitNode(node *flowNode, sessID string, body []byte) (*asyn
 	return cli.Enqueue(asynT, opts...)
 }
 
-func (e Executor) getAggData(node *flowNode, sessID string) ([]byte, error) {
+func (e Executor) getAggData(node flowNode, sessID string) ([]byte, error) {
 	f := e.f
 	logger := f.logger
-	parents, err := f.DAG.GetParents(node.name)
+	parents, err := f.DAG.GetParents(node.Name())
 	if err != nil {
 		return nil, err
 	}
 	aggData := map[string][]byte{}
 	for _, dagParent := range parents {
-		parent := dagParent.(*flowNode) // nolint
-		execID := newExecID(f.Name, parent.name, sessID)
+		parent := dagParent.(flowNode) // nolint
+		execID := newExecID(f.Name, parent.Name(), sessID)
 		eRes, err := e.getExecResult(execID)
 		logger.Debug("parent result", "execID", execID, "eRes", eRes, "err", err)
 		if err != nil {
@@ -167,11 +160,12 @@ func (e Executor) getAggData(node *flowNode, sessID string) ([]byte, error) {
 		if eRes == nil {
 			return nil, errors.Wrapf(types.ErrExecHasDependency, "dependency: %s", execID)
 		}
-		aggData[parent.name] = eRes.Resp
+		aggData[parent.Name()] = eRes.Resp
 	}
 	var body []byte
-	if node.execOpts.aggregator != nil {
-		body, err = node.execOpts.aggregator(aggData)
+	execOpts := node.ExecutionOptions()
+	if execOpts.aggregator != nil {
+		body, err = execOpts.aggregator(aggData)
 	} else {
 		body, err = randomAgg(aggData)
 	}
@@ -183,13 +177,13 @@ func (e *Executor) getLeavesResult(sessID string) (map[string]*ExecResult, error
 	resMap := map[string]*ExecResult{}
 	leaves := f.DAG.GetLeaves()
 	for _, leaf := range leaves {
-		node := leaf.(*flowNode) // nolint
-		execID := newExecID(f.Name, node.name, sessID)
+		node := leaf.(flowNode) // nolint
+		execID := newExecID(f.Name, node.Name(), sessID)
 		eRes, err := e.getExecResult(execID)
 		if err != nil {
 			return nil, err
 		}
-		resMap[node.name] = eRes
+		resMap[node.Name()] = eRes
 	}
 	return resMap, nil
 }
