@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"sync"
+	"log/slog"
+	"os"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/yuyang0/dagflow/flow"
@@ -12,8 +14,21 @@ import (
 )
 
 const redisAddr = "127.0.0.1:6379"
+const flowName, nodeName = "f1", "n1"
 
 func main() {
+	if len(os.Args) != 2 {
+		log.Fatal("usage: one_node [server|client]")
+	}
+	switch os.Args[1] {
+	case "server":
+		runServer()
+	case "client":
+		runClient()
+	}
+}
+
+func runServer() {
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
 		asynq.Config{
@@ -29,32 +44,43 @@ func main() {
 		},
 	)
 	mux := asynq.NewServeMux()
-	flowName, nodeName := "f1", "n1"
 	createSvcAndFlow(mux, flowName, nodeName)
 	// ...register other handlers...
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := srv.Run(mux); err != nil {
-			log.Fatalf("could not run server: %v", err)
-		}
-	}()
-	clientSVC := createClientSVC(flowName, nodeName)
-	if _, err := clientSVC.Submit(flowName, []byte(`1`)); err != nil {
+	if err := srv.Run(mux); err != nil {
+		log.Fatalf("could not run server: %v", err)
+	}
+}
+
+func runClient() {
+	clientSVC, _ := createSvcAndFlow(nil, flowName, nodeName)
+	sessID, err := clientSVC.Submit(flowName, []byte(`1`))
+	if err != nil {
 		log.Fatal("failed to submit task", err)
 	}
-	wg.Wait()
+	time.Sleep(15 * time.Second)
+	resMap, err := clientSVC.GetResult(flowName, sessID)
+	if err != nil {
+		log.Fatal("failed to get result", err)
+	}
+
+	for k, v := range resMap {
+		var i int
+		json.Unmarshal(v.Resp, &i)
+		log.Printf("+++++ %s, result: %d\n", k, i)
+	}
 }
 
 func createSvcAndFlow(mux *asynq.ServeMux, flowName, nodeName string) (*service.Service, *flow.Flow) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
 	svc, err := service.New(&types.Config{
 		Redis: types.RedisConfig{
 			Addr:   redisAddr,
 			Expire: 120,
 		},
-	}, nil)
+	}, logger)
 	if err != nil {
 		log.Fatal("failed to create service", err)
 	}
@@ -70,11 +96,6 @@ func createSvcAndFlow(mux *asynq.ServeMux, flowName, nodeName string) (*service.
 		log.Fatalf("failed to register flow: %v", err)
 	}
 	return svc, f
-}
-
-func createClientSVC(flowName, nodeName string) *service.Service {
-	svc, _ := createSvcAndFlow(nil, flowName, nodeName)
-	return svc
 }
 
 func incOp(data []byte, option map[string][]string) ([]byte, error) {

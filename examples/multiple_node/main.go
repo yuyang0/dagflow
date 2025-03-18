@@ -7,7 +7,6 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -17,9 +16,21 @@ import (
 )
 
 const redisAddr = "127.0.0.1:6379"
+const flowName = "f2"
 
 func main() {
+	if len(os.Args) != 2 {
+		log.Fatal("usage: one_node [server|client]")
+	}
+	switch os.Args[1] {
+	case "server":
+		runServer()
+	case "client":
+		runClient()
+	}
+}
 
+func runServer() {
 	mux := asynq.NewServeMux()
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr},
@@ -35,19 +46,16 @@ func main() {
 			// See the godoc for other configuration options
 		},
 	)
-	flowName := "f2"
 	createSvc(mux, flowName)
 	// ...register other handlers...
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := srv.Run(mux); err != nil {
-			log.Fatalf("could not run server: %v", err)
-		}
-	}()
-	clientSVC := createClientSVC(flowName)
+	if err := srv.Run(mux); err != nil {
+		log.Fatalf("could not run server: %v", err)
+	}
+}
+
+func runClient() {
+	clientSVC := createSvc(nil, flowName)
 	intialV := 10
 	expectV := (10 + 1 + 1) * (10 + 1 - 1) * 2
 	sessID, err := clientSVC.Submit("f2", []byte(fmt.Sprintf(`%d`, intialV)))
@@ -65,7 +73,6 @@ func main() {
 		json.Unmarshal(v.Resp, &i)
 		log.Printf("+++++ %s, actual: %d, expect: %d\n", k, i, expectV)
 	}
-	wg.Wait()
 }
 
 func createSvc(mux *asynq.ServeMux, flowName string) *service.Service {
@@ -89,10 +96,6 @@ func createSvc(mux *asynq.ServeMux, flowName string) *service.Service {
 	return svc
 }
 
-func createClientSVC(flowName string) *service.Service {
-	svc := createSvc(nil, flowName)
-	return svc
-}
 func incOp(data []byte, option map[string][]string) ([]byte, error) {
 	var i int
 	if err := json.Unmarshal(data, &i); err != nil {
