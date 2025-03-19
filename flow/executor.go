@@ -79,7 +79,6 @@ func (e *Executor) Execute(ctx context.Context) error {
 		return errors.Wrapf(err, "failed to set result for %s", e.ID)
 	}
 	// submit children
-	logger.Debug("submit children", "node", nodeName)
 	return e.submitChildren(node, sessID)
 }
 
@@ -92,7 +91,7 @@ func (e *Executor) submitChildren(node flowNode, sessID string) error {
 	}
 	for _, dagChild := range childMap {
 		child := dagChild.(flowNode) // nolint
-		logger.Debug("submit node", "node", child.Name())
+		logger.Debug("submit child", "node", node.Name(), "child", child.Name())
 		if _, err := e.submitNode(child, sessID, nil); err != nil {
 			if errors.Is(err, types.ErrExecHasDependency) {
 				continue
