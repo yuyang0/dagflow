@@ -136,7 +136,12 @@ func (e *Executor) submitNode(node flowNode, sessID string, body []byte) (*asynq
 		ID:   newExecID(f.Name, node.Name(), sessID),
 		Body: body,
 	}
-	bs, _ := json.Marshal(newExec)
+
+	bs, err := json.Marshal(newExec)
+	if err != nil {
+		return nil, err
+	}
+
 	asynT := asynq.NewTask(f.Name, bs)
 	opts := []asynq.Option{
 		asynq.TaskID(newExec.ID),
