@@ -57,7 +57,7 @@ func runServer() {
 func runClient() {
 	clientSVC := createSvc(nil, flowName)
 	intialV := 10
-	expectV := (10 + 1 + 1) * (10 + 1 - 1) * 2
+	expectV := (intialV + 1 + 1) * (intialV + 1 - 1) * 2
 	sessID, err := clientSVC.Submit("f2", []byte(fmt.Sprintf(`%d`, intialV)))
 	if err != nil {
 		log.Fatal("failed to submit task", err)
@@ -70,7 +70,7 @@ func runClient() {
 
 	for k, v := range resMap {
 		var i int
-		json.Unmarshal(v.Resp, &i)
+		_ = json.Unmarshal(v.Resp, &i)
 		log.Printf("+++++ %s, actual: %d, expect: %d\n", k, i, expectV)
 	}
 }
