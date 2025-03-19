@@ -96,6 +96,13 @@ func (e *Executor) submitChildren(node flowNode, sessID string) error {
 			if errors.Is(err, types.ErrExecHasDependency) {
 				continue
 			}
+			// children may be submitted by multiple parents,
+			// so we can ignore the conflict error.
+			// warn log are just for debugging
+			if errors.Is(err, asynq.ErrTaskIDConflict) {
+				logger.Warn("child task id conflict", "node", node.Name(), "child", child.Name(), "sessID", sessID)
+				continue
+			}
 			return err
 		}
 	}
