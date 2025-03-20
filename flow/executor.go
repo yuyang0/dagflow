@@ -99,7 +99,7 @@ func (e *Executor) submitChildren(node flowNode, sessID string) error {
 			// children may be submitted by multiple parents,
 			// so we can ignore the conflict error.
 			// warn log are just for debugging
-			if errors.Is(err, asynq.ErrTaskIDConflict) {
+			if errors.Is(err, asynq.ErrTaskIDConflict) || errors.Is(err, types.ErrExecResultExists) {
 				logger.Warn("child task id conflict", "node", node.Name(), "child", child.Name(), "sessID", sessID)
 				continue
 			}
@@ -127,6 +127,7 @@ func (e *Executor) submitNode(node flowNode, sessID string, body []byte) (*asynq
 	cli := f.cli
 	cfg := f.cfg
 	var err error
+	// non-root node
 	if body == nil {
 		if body, err = e.getAggData(node, sessID); err != nil {
 			return nil, err
@@ -149,14 +150,35 @@ func (e *Executor) submitNode(node flowNode, sessID string, body []byte) (*asynq
 		asynq.Retention(cfg.Timeout),
 		asynq.Timeout(cfg.Timeout),
 	}
+
 	return cli.Enqueue(asynT, opts...)
+}
+
+func (e Executor) checkExecResultNotExists(execID string, parents map[string]any) error {
+	if len(parents) <= 1 {
+		return nil
+	}
+	_, err := e.getExecResult(execID)
+	switch {
+	case err == nil:
+		return types.ErrExecResultExists
+	case errors.Is(err, types.ErrExecResultNotExists):
+		return nil
+	default:
+		return err
+	}
 }
 
 func (e Executor) getAggData(node flowNode, sessID string) ([]byte, error) {
 	f := e.f
 	logger := f.logger
+
 	parents, err := f.DAG.GetParents(node.Name())
 	if err != nil {
+		return nil, err
+	}
+	// if execution result exists, we can ignore submitting this node
+	if err := e.checkExecResultNotExists(newExecID(f.Name, node.Name(), sessID), parents); err != nil {
 		return nil, err
 	}
 	aggData := map[string][]byte{}
@@ -213,24 +235,30 @@ func (e *Executor) setExecResult(ctx context.Context, eRes *ExecResult) error {
 	return err
 }
 
+// getExecResult gets the execution result for the given execID from either the custom store or the inspector.
+// If the result does not exist, it returns an error of type ErrExecResultNotExists.
+// If the result exists but fails to unmarshal, it wraps the error with a message indicating the failure to unmarshal.
 func (e *Executor) getExecResult(execID string) (eRes *ExecResult, err error) {
 	var bs []byte
 	f := e.f
 	cfg := e.f.cfg
-	if cfg.UseCustomStore {
+	if cfg.UseCustomStore { //nolint
 		bs, err = f.stor.Get(context.TODO(), execID)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		ti, err := f.insp.GetTaskInfo("default", execID)
 		if err != nil {
+			if errors.Is(err, asynq.ErrTaskNotFound) {
+				err = errors.Wrapf(types.ErrExecResultNotExists, "execID: %s", execID)
+			}
 			return nil, err
 		}
 		bs = ti.Result
 	}
-	if err != nil {
-		return nil, err
-	}
 	if bs == nil {
-		return nil, nil
+		return nil, errors.Wrapf(types.ErrExecResultNotExists, "execID: %s", execID)
 	}
 	eRes = &ExecResult{}
 	if err := json.Unmarshal(bs, eRes); err != nil {
