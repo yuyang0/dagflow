@@ -94,13 +94,14 @@ func (e *Executor) submitChildren(node flowNode, sessID string) error {
 		logger.Debug("submit child", "node", node.Name(), "child", child.Name())
 		if _, err := e.submitNode(child, sessID, nil); err != nil {
 			if errors.Is(err, types.ErrExecHasDependency) {
+				logger.Debug("child has uncompleted dependency", "node", node.Name(), "child", child.Name(), "sessID", sessID)
 				continue
 			}
 			// children may be submitted by multiple parents,
 			// so we can ignore the conflict error.
 			// warn log are just for debugging
 			if errors.Is(err, asynq.ErrTaskIDConflict) || errors.Is(err, types.ErrExecResultExists) {
-				logger.Warn("child task id conflict", "node", node.Name(), "child", child.Name(), "sessID", sessID)
+				logger.Warn("child task id conflict, it's ok in case that a node has multiple parents", "node", node.Name(), "child", child.Name(), "sessID", sessID)
 				continue
 			}
 			return err
