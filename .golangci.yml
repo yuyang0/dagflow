@@ -5,6 +5,7 @@ run:
     - vendor
     - tools
     - 3rdmocks
+    - utils/idgen
   modules-download-mode: readonly
   go: 1.20
 

@@ -31,7 +31,7 @@ type RedisConfig struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	DB            int      `json:"db"`
-	Expire        uint     `json:"expire"`
+	Expire        int      `json:"expire"`
 }
 
 func (rCfg *RedisConfig) check() error {
