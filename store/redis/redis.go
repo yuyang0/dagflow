@@ -51,6 +51,9 @@ func (s *Store) Get(ctx context.Context, k string) ([]byte, error) {
 	key := fmt.Sprintf("%s_%s", prefix, k)
 	obj, err := s.cli.Get(ctx, key).Result()
 	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return []byte(obj), nil
