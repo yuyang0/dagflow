@@ -10,7 +10,7 @@ require (
 	github.com/heimdalr/dag v1.4.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/mcuadros/go-defaults v1.2.0
-	github.com/redis/go-redis/v9 v9.0.3
+	github.com/redis/go-redis/v9 v9.2.0
 	github.com/stretchr/testify v1.8.1
 )
 
@@ -23,6 +23,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
+	github.com/go-redis/redismock/v9 v9.2.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
