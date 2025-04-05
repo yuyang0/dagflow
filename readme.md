@@ -9,6 +9,7 @@
 a DAG task engine based on asynq
 
 ## QuickStart
+The examples directory contains serveral examples, it's a good place to figure out how to use this library.
 ### server side
 1. prepare asynq server mux
     ```golang
