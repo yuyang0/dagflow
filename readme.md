@@ -6,7 +6,7 @@
 [![GoDoc](https://godoc.org/github.com/yuyang0/dagflow?status.svg)](https://godoc.org/github.com/yuyang0/dagflow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-a DAG task engine based on asynq
+a DAG task engine based on [asynq](https://github.com/hibiken/asynq)
 
 ## QuickStart
 The examples directory contains serveral examples, it's a good place to figure out how to use this library.
